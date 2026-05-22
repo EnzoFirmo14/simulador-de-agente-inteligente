@@ -1,8 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
-import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import Groq from "groq-sdk";
 
 dotenv.config();
 
@@ -11,147 +10,60 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Helper to get Gemini Client safely
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is missing. Please configure it in Settings > Secrets.");
-  }
-  return new GoogleGenAI({
-    apiKey: apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
-}
+// Serve os arquivos estáticos da pasta public (HTML, CSS, JS)
+const publicPath = path.join(process.cwd(), "public");
+app.use(express.static(publicPath));
 
-// API: Check status & keys
-app.get("/api/config", (req, res) => {
-  res.json({
-    hasApiKey: !!process.env.GEMINI_API_KEY,
-  });
+// Rota raiz envia o index.html explicitamente
+app.get("/", (req, res) => {
+  res.sendFile(path.join(publicPath, "index.html"));
 });
 
-// API: Simulate Intelligent Agent step-by-step
-app.post("/api/simulate", async (req, res) => {
+// Endpoint super simples para conversar com o Gemini
+app.post("/api/chat", async (req, res) => {
   try {
-    const { agentName, problem, peas, inputData } = req.body;
+    const { message } = req.body;
 
-    if (!agentName || !problem || !inputData) {
-      return res.status(400).json({ error: "Parâmetros 'agentName', 'problem' e 'inputData' são obrigatórios." });
+    if (!message) {
+      return res.status(400).json({ error: "A mensagem não pode estar vazia." });
     }
 
-    const ai = getGeminiClient();
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "GROQ_API_KEY não configurada no .env" });
+    }
 
-    const systemInstruction = `Você é o mecanismo cognitivo central (cérebro) do Agente Inteligente "${agentName}".
-Este agente foi desenvolvido para resolver o seguinte problema real: "${problem}".
+    const groq = new Groq({ apiKey });
 
-Arquitetura PEAS do Agente:
-- Desempenho (Performance): ${peas?.performance || "Não especificado"}
-- Ambiente (Environment): ${peas?.environment || "Não especificado"}
-- Atuadores (Actuators): ${peas?.actuators || "Não especificado"}
-- Sensores (Sensors): ${peas?.sensors || "Não especificado"}
+    const systemInstruction = `Você é o "Assistente Inteligente Escolar" (EduAI).
+Você ajuda alunos com resumos, explicações didáticas de matérias escolares e tira dúvidas de forma amigável, clara e paciente. 
+Use exemplos fáceis de entender.`;
 
-Seu papel é receber os dados capturados pelos sensores do agente, processar cognitivamente (raciocinar de acordo com suas regras e objetivos do PEAS), determinar a melhor resposta ou ação, e explicar como os atuadores interagem com o ambiente.`;
-
-    const userPrompt = `Os sensores capturaram o seguinte sinal/evento do ambiente:
-"${inputData}"
-
-Atue agora como o Agente Inteligente. Processe essa entrada e formule a saída de acordo com o esquema JSON especificado.`;
-
-    // Prompt Gemini with a detailed schema to structure inputs, processing, and outputs
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: userPrompt,
-      config: {
-        systemInstruction,
-        temperature: 0.2,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            perceptionDetails: {
-              type: Type.STRING,
-              description: "Análise e higienização dos dados capturados pelos sensores (Entrada).",
-            },
-            reasoningSteps: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "Os passos lógicos que o cérebro do agente percorreu para processar os dados e decidir a ação (Processamento). Mínimo 3 passos explicativos.",
-            },
-            decisionMade: {
-              type: Type.STRING,
-              description: "A decisão tomada ou comando gerado para execução imediata.",
-            },
-            actuatorAction: {
-              type: Type.STRING,
-              description: "Descrição de como o atuador executa a decisão no ambiente físico/digital (Saída).",
-            },
-            peasImpact: {
-              type: Type.OBJECT,
-              properties: {
-                performanceEffect: {
-                  type: Type.STRING,
-                  description: "Como essa ação específica afeta positivamente as métricas de desempenho.",
-                },
-                environmentChange: {
-                  type: Type.STRING,
-                  description: "A modificação ou feedback gerado no ambiente operacional após a ação.",
-                },
-              },
-              required: ["performanceEffect", "environmentChange"],
-            },
-          },
-          required: [
-            "perceptionDetails",
-            "reasoningSteps",
-            "decisionMade",
-            "actuatorAction",
-            "peasImpact",
-          ],
-        },
-      },
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: message }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
     });
 
-    const resultText = response.text || "{}";
-    const resultJson = JSON.parse(resultText);
+    const reply = chatCompletion.choices[0]?.message?.content || "Desculpe, não consegui formular uma resposta.";
 
     res.json({
       success: true,
-      agentName,
-      inputRaw: inputData,
-      simulation: resultJson,
+      reply: reply,
     });
   } catch (error: any) {
-    console.error("Simulation Error:", error);
+    console.error("Erro no Chat API:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Erro interno ao simular o agente.",
+      error: error.message || "Erro interno de servidor",
     });
   }
 });
 
-// Start server function incorporating Vite middleware
-async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || "development"} mode`);
-  });
-}
-
-startServer();
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+  console.log(`Interface limpa e simplificada pronta!`);
+});

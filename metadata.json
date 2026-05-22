@@ -1,0 +1,6 @@
+{
+  "name": "Simulador de Agente Inteligente",
+  "description": "Plataforma interativa para propor, desenhar o fluxograma e simular agentes inteligentes para problemas reais.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

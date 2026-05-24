@@ -44,7 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ message: text })
+                body: JSON.stringify({ 
+                    message: text,
+                    modelProvider: document.getElementById('model-select').value
+                })
             });
 
             const data = await response.json();

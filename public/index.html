@@ -35,9 +35,17 @@
         <!-- Main Chat Area -->
         <main class="chat-container">
             <header class="chat-header">
-                <div class="header-info">
-                    <h2>Assistente Inteligente Escolar</h2>
-                    <p>Tire suas dúvidas, peça explicações e resumos sobre qualquer matéria!</p>
+                <div class="header-info" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <div>
+                        <h2>Assistente Inteligente Escolar</h2>
+                        <p>Tire suas dúvidas, peça explicações e resumos sobre qualquer matéria!</p>
+                    </div>
+                    <div class="model-selector">
+                        <select id="model-select" style="padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: inherit; font-family: inherit; cursor: pointer;">
+                            <option value="gemini" style="color: black;">Google Gemini</option>
+                            <option value="grok" style="color: black;">Grok (Llama 3.3)</option>
+                        </select>
+                    </div>
                 </div>
             </header>
 
